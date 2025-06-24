@@ -1,0 +1,72 @@
+# ===============================
+# IntelliJ IDEA
+# ===============================
+.idea/
+*.iml
+*.iws
+out/
+
+# ===============================
+# Maven
+# ===============================
+/target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Logs
+*.log
+
+# ===============================
+# Sistema operacional
+# ===============================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*.swp
+*.swo
+*~
+
+# ===============================
+# Minecraft Plugin
+# ===============================
+# Arquivos gerados localmente
+plugins/
+logs/
+cache/
+config/
+world/
+world_nether/
+world_the_end/
+
+# ===============================
+# Java
+# ===============================
+*.class
+
+# ===============================
+# IDEs variadas
+# ===============================
+.vscode/
+*.code-workspace
+
+# ===============================
+# Backup / temporários
+# ===============================
+*.tmp
+*.bak
+*.old
+*.orig
+
+# ===============================
+# Outros
+# ===============================
+.env
+*.jar

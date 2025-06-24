@@ -1,0 +1,40 @@
+name: core
+version: 1.0.0
+main: com.realmmc.core.Main
+author: Lucas Corrêa
+description: Core plugin for server.
+depend: [LuckPerms]
+
+commands:
+  teleport:
+    description: Usado para se teleportar a um jogador ou um jogador ao outro.
+    usage: /tp <nick> [nick]
+    aliases: [tp, teleport, teleporte, teletransportar]
+  gamemode:
+    description: Usado para alterar o seu modo de jogo ou de outro jogador.
+    usage: /gm <modo> [nick]
+    aliases: [gm, gamemode, mododejogo]
+  setspawn:
+    description: Usado para definir o spawn do servidor.
+    usage: /setspawn
+    aliases: [setspawn, setarspawn, definirspawn]
+  spawn:
+    description: Usado para teleportar a si mesmo ou a outro jogador para o spawn do servidor.
+    usage: /spawn [jogador]
+    aliases: [spawn, irparaospawn, irspawn]
+  setwarp:
+    description: Usado para definir um warp no servidor.
+    usage: /setwarp <nome>
+    aliases: [setwarp, setwarps, setarwarp, definirwarp]
+  delwarp:
+    description: Usado para deletar um warp definido no servidor.
+    usage: /delwarp <nome>
+    aliases: [delwarp, delwarps, deletarwarp, removerwarp]
+  warp:
+    description: Usado para teleportar a si mesmo ou a outro jogador para um warp definido.
+    usage: /warp <nome> [jogador]
+    aliases: [warp, irparaowarp, irwarp, warps]
+  combatstats:
+    description: Mostra suas estatísticas de combate
+    usage: /combatstats
+    aliases: [combatstats, statscombate, combatestatisticas]
