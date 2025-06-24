@@ -1,41 +1,64 @@
 package com.realmmc.core.utils;
 
 import net.luckperms.api.LuckPerms;
-import net.luckperms.api.cacheddata.CachedMetaData;
 import net.luckperms.api.model.user.User;
-import net.luckperms.api.query.QueryOptions;
+import net.luckperms.api.node.Node;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 
 import java.util.*;
-import java.util.concurrent.*;
-import java.util.function.Consumer;
-import java.util.stream.Collectors;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
+/**
+ * Classe utilitária para manipulação e formatação de nomes de jogadores.
+ * Utiliza LuckPerms como base para obter prefixos e sufixos.
+ *
+ * <p>Recursos:</p>
+ * <ul>
+ *     <li>Integração com LuckPerms</li>
+ *     <li>Cache de nomes formatados</li>
+ *     <li>Suporte a prefixos e sufixos</li>
+ *     <li>Formatação de nomes offline</li>
+ *     <li>Gerenciamento de jogadores nunca vistos</li>
+ * </ul>
+ *
+ * <p>Exemplo de uso:</p>
+ * <pre>
+ * {@code
+ * playerNameUtils.init(luckPermsInstance);
+ * String formattedName = playerNameUtils.getFormattedName(player);
+ * }
+ * </pre>
+ *
+ * @author Lucas Corrêa
+ */
 public final class playerNameUtils {
 
     private static LuckPerms luckPerms;
-    private static final Map<UUID, String> nameCache = new ConcurrentHashMap<>();
     private static final Map<UUID, String> formattedNameCache = new ConcurrentHashMap<>();
-    private static final Map<UUID, String> prefixCache = new ConcurrentHashMap<>();
-    private static final Map<UUID, String> suffixCache = new ConcurrentHashMap<>();
-    private static final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-    
-    static {
-        // Limpar cache a cada 5 minutos
-        scheduler.scheduleAtFixedRate(playerNameUtils::clearCache, 5, 5, TimeUnit.MINUTES);
-    }
+    private static final ExecutorService scheduler = Executors.newSingleThreadExecutor();
 
     private playerNameUtils() {
         throw new AssertionError("Esta classe não deve ser instanciada.");
     }
 
+    /**
+     * Inicializa a integração com o LuckPerms.
+     *
+     * @param lp Instância do LuckPerms.
+     */
     public static void init(LuckPerms lp) {
         luckPerms = Objects.requireNonNull(lp, "[playerNameUtils] A instância do LuckPerms não pode ser nula");
     }
 
+    /**
+     * Finaliza os recursos utilizados.
+     */
     public static void shutdown() {
         scheduler.shutdown();
         try {
@@ -48,97 +71,38 @@ public final class playerNameUtils {
         }
     }
 
+    /**
+     * Limpa o cache de nomes formatados.
+     */
     public static void clearCache() {
-        nameCache.clear();
         formattedNameCache.clear();
-        prefixCache.clear();
-        suffixCache.clear();
     }
 
+    /**
+     * Limpa o cache para um jogador específico.
+     *
+     * @param playerId UUID do jogador.
+     */
     public static void clearCache(UUID playerId) {
-        nameCache.remove(playerId);
         formattedNameCache.remove(playerId);
-        prefixCache.remove(playerId);
-        suffixCache.remove(playerId);
     }
 
-    public static Player getOnlinePlayer(String name) {
-        if (name == null) return null;
-        return Bukkit.getOnlinePlayers().stream()
-                .filter(player -> player.getName().equalsIgnoreCase(name))
-                .findFirst()
-                .orElse(null);
-    }
-
-    public static boolean playerExists(String name) {
-        if (name == null) return false;
-        return Arrays.stream(Bukkit.getOfflinePlayers())
-                .anyMatch(player -> name.equalsIgnoreCase(player.getName()));
-    }
-
-    public static String getCorrectName(String name) {
-        if (name == null) return null;
-        return Arrays.stream(Bukkit.getOfflinePlayers())
-                .filter(player -> name.equalsIgnoreCase(player.getName()))
-                .findFirst()
-                .map(OfflinePlayer::getName)
-                .orElse(name);
-    }
-
-    public static Optional<UUID> getPlayerUUID(String name) {
-        if (name == null) return Optional.empty();
-        return Arrays.stream(Bukkit.getOfflinePlayers())
-                .filter(player -> name.equalsIgnoreCase(player.getName()))
-                .findFirst()
-                .map(OfflinePlayer::getUniqueId);
-    }
-
+    /**
+     * Obtém o nome formatado de um jogador online.
+     *
+     * @param player Jogador online.
+     * @return Nome formatado.
+     */
     public static String getFormattedName(Player player) {
-        if (player == null) return "";
-        return formattedNameCache.computeIfAbsent(player.getUniqueId(), uuid -> {
-            if (luckPerms == null) return player.getName();
-
-            User user = luckPerms.getUserManager().getUser(uuid);
-            if (user == null) return player.getName();
-
-            CachedMetaData metaData = user.getCachedData().getMetaData(QueryOptions.nonContextual());
-            String prefix = Optional.ofNullable(metaData.getPrefix()).orElse("");
-            String suffix = Optional.ofNullable(metaData.getSuffix()).orElse("");
-
-            return ChatColor.translateAlternateColorCodes('&', prefix + player.getName() + suffix);
-        });
+        return getFormattedName(player.getUniqueId(), player.getName());
     }
 
-    public static String getPrefix(Player player) {
-        if (player == null) return "";
-        return prefixCache.computeIfAbsent(player.getUniqueId(), uuid -> {
-            if (luckPerms == null) return "";
-
-            User user = luckPerms.getUserManager().getUser(uuid);
-            if (user == null) return "";
-
-            return Optional.ofNullable(user.getCachedData()
-                    .getMetaData(QueryOptions.nonContextual())
-                    .getPrefix())
-                    .orElse("");
-        });
-    }
-
-    public static String getSuffix(Player player) {
-        if (player == null) return "";
-        return suffixCache.computeIfAbsent(player.getUniqueId(), uuid -> {
-            if (luckPerms == null) return "";
-
-            User user = luckPerms.getUserManager().getUser(uuid);
-            if (user == null) return "";
-
-            return Optional.ofNullable(user.getCachedData()
-                    .getMetaData(QueryOptions.nonContextual())
-                    .getSuffix())
-                    .orElse("");
-        });
-    }
-
+    /**
+     * Obtém o nome formatado de um jogador offline.
+     *
+     * @param name Nome do jogador.
+     * @return CompletableFuture com o nome formatado.
+     */
     public static CompletableFuture<String> getFormattedOfflineName(String name) {
         if (name == null) return CompletableFuture.completedFuture("");
 
@@ -160,89 +124,100 @@ public final class playerNameUtils {
         }
 
         return CompletableFuture.supplyAsync(() -> {
-            // Tenta carregar do cache novamente (pode ter sido carregado em outra thread)
             if (formattedNameCache.containsKey(uuid)) {
                 return formattedNameCache.get(uuid);
             }
 
             // Carrega o jogador offline
             OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(uuid);
-            if (!offlinePlayer.hasPlayedBefore() && !offlinePlayer.isOnline()) {
-                return name;
-            }
-
-            // Usa o LuckPerms para obter o nome formatado
-            if (luckPerms != null) {
-                User user = luckPerms.getUserManager().loadUser(uuid).join();
-                if (user != null) {
-                    CachedMetaData metaData = user.getCachedData().getMetaData(QueryOptions.nonContextual());
-                    String prefix = Optional.ofNullable(metaData.getPrefix()).orElse("");
-                    String suffix = Optional.ofNullable(metaData.getSuffix()).orElse("");
-                    String playerName = Optional.ofNullable(offlinePlayer.getName()).orElse(name);
-                    String formatted = ChatColor.translateAlternateColorCodes('&', prefix + playerName + suffix);
-                    formattedNameCache.put(uuid, formatted);
-                    return formatted;
-                }
-            }
-
-            return Optional.ofNullable(offlinePlayer.getName()).orElse(name);
-        }).exceptionally(ex -> {
-            ex.printStackTrace();
-            return name;
+            return getFormattedName(uuid, offlinePlayer.getName());
         });
     }
 
-    private static org.bukkit.plugin.Plugin pluginInstance;
+    /**
+     * Obtém o nome formatado com base no UUID e nome do jogador.
+     *
+     * @param uuid UUID do jogador.
+     * @param name Nome do jogador.
+     * @return Nome formatado.
+     */
+    private static String getFormattedName(UUID uuid, String name) {
+        if (name == null) return "";
 
-    public static void setPluginInstance(org.bukkit.plugin.Plugin plugin) {
-        pluginInstance = plugin;
+        return formattedNameCache.computeIfAbsent(uuid, id -> {
+            User user = luckPerms.getUserManager().getUser(id);
+            if (user == null) return name;
+
+            String prefix = user.getCachedData().getMetaData().getPrefix();
+            String suffix = user.getCachedData().getMetaData().getSuffix();
+
+            return (prefix != null ? prefix + " " : "") +
+                   name +
+                   (suffix != null ? " " + suffix : "");
+        });
     }
 
-    public static void getFormattedOfflineNameAsync(String name, Consumer<String> callback) {
-        if (pluginInstance == null) {
-            throw new IllegalStateException("Plugin instance not set. Call playerNameUtils.setPluginInstance(yourPlugin) first.");
-        }
-        getFormattedOfflineName(name).thenAcceptAsync(callback, Bukkit.getScheduler().getMainThreadExecutor(pluginInstance));
+    /**
+     * Obtém um jogador online pelo nome.
+     *
+     * @param name Nome do jogador.
+     * @return Jogador online, ou null se não encontrado.
+     */
+    public static Player getOnlinePlayer(String name) {
+        return Bukkit.getPlayer(name);
     }
 
-    public static CompletableFuture<String> getFormattedNameWithPlaceholders(Player player, String placeholderFormat) {
-        if (player == null) return CompletableFuture.completedFuture("");
+    /**
+     * Obtém o UUID de um jogador pelo nome.
+     *
+     * @param name Nome do jogador.
+     * @return UUID do jogador, ou null se não encontrado.
+     */
+    private static Optional<UUID> getPlayerUUID(String name) {
+        OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(name);
+        return offlinePlayer.hasPlayedBefore() || offlinePlayer.isOnline()
+               ? Optional.of(offlinePlayer.getUniqueId())
+               : Optional.empty();
+    }
+
+    /**
+     * Adiciona um prefixo a um jogador.
+     *
+     * @param player Jogador.
+     * @param prefix Prefixo.
+     * @return CompletableFuture com o resultado da operação.
+     */
+    public static CompletableFuture<Boolean> addPrefix(Player player, boolean prefix) {
         return CompletableFuture.supplyAsync(() -> {
-            String formattedName = getFormattedName(player);
-            return placeholderFormat
-                    .replace("{name}", player.getName())
-                    .replace("{displayname}", player.getDisplayName())
-                    .replace("{formatted}", formattedName)
-                    .replace("{prefix}", getPrefix(player))
-                    .replace("{suffix}", getSuffix(player));
+            User user = luckPerms.getUserManager().getUser(player.getUniqueId());
+            if (user == null) return false;
+
+            user.data().add(Node.builder("prefix").value(prefix).build());
+            luckPerms.getUserManager().saveUser(user);
+            return true;
         });
     }
 
-    public static List<String> getOnlinePlayerNames() {
-        return Bukkit.getOnlinePlayers().stream()
-                .map(Player::getName)
-                .collect(Collectors.toList());
+    /**
+     * Adiciona um sufixo a um jogador.
+     *
+     * @param player Jogador.
+     * @param suffix Sufixo.
+     * @return CompletableFuture com o resultado da operação.
+     */
+    public static CompletableFuture<Boolean> addSuffix(Player player, boolean suffix) {
+        return CompletableFuture.supplyAsync(() -> {
+            User user = luckPerms.getUserManager().getUser(player.getUniqueId());
+            if (user == null) return false;
+
+            user.data().add(Node.builder("suffix").value(suffix).build());
+            luckPerms.getUserManager().saveUser(user);
+            return true;
+        });
     }
 
-    public static List<String> getOnlinePlayerFormattedNames() {
-        return Bukkit.getOnlinePlayers().stream()
-                .map(playerNameUtils::getFormattedName)
-                .collect(Collectors.toList());
-    }
-
-    public static Map<UUID, String> getAllCachedNames() {
-        return Collections.unmodifiableMap(nameCache);
-    }
-
-    public static Map<UUID, String> getAllCachedFormattedNames() {
-        return Collections.unmodifiableMap(formattedNameCache);
-    }
-
-    public static String getBestName(OfflinePlayer player) {
-        if (player == null) return "null";
-        if (player.isOnline()) {
-            return getFormattedName(player.getPlayer());
-        }
-        return Optional.ofNullable(player.getName()).orElse("Desconhecido");
+    public static boolean playerExists(String nomeAlvo) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'playerExists'");
     }
 }
