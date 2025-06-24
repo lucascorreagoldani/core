@@ -2,7 +2,6 @@ package com.realmmc.core.utils;
 
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.model.user.User;
-import net.luckperms.api.node.Node;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
@@ -163,7 +162,7 @@ public final class playerNameUtils {
      * @param name Nome do jogador.
      * @return Jogador online, ou null se não encontrado.
      */
-    public static Player getOnlinePlayer(String name) {
+    private static Player getOnlinePlayer(String name) {
         return Bukkit.getPlayer(name);
     }
 
@@ -187,12 +186,12 @@ public final class playerNameUtils {
      * @param prefix Prefixo.
      * @return CompletableFuture com o resultado da operação.
      */
-    public static CompletableFuture<Boolean> addPrefix(Player player, boolean prefix) {
+    public static CompletableFuture<Boolean> addPrefix(Player player, String prefix) {
         return CompletableFuture.supplyAsync(() -> {
             User user = luckPerms.getUserManager().getUser(player.getUniqueId());
             if (user == null) return false;
 
-            user.data().add(Node.builder("prefix").value(prefix).build());
+            user.data().add(net.luckperms.api.node.types.PrefixNode.builder(prefix, 100).build());
             luckPerms.getUserManager().saveUser(user);
             return true;
         });
@@ -205,19 +204,14 @@ public final class playerNameUtils {
      * @param suffix Sufixo.
      * @return CompletableFuture com o resultado da operação.
      */
-    public static CompletableFuture<Boolean> addSuffix(Player player, boolean suffix) {
+    public static CompletableFuture<Boolean> addSuffix(Player player, String suffix) {
         return CompletableFuture.supplyAsync(() -> {
             User user = luckPerms.getUserManager().getUser(player.getUniqueId());
             if (user == null) return false;
 
-            user.data().add(Node.builder("suffix").value(suffix).build());
+            user.data().add(net.luckperms.api.node.types.SuffixNode.builder(suffix, 100).build());
             luckPerms.getUserManager().saveUser(user);
             return true;
         });
-    }
-
-    public static boolean playerExists(String nomeAlvo) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'playerExists'");
     }
 }
