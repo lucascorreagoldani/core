@@ -3,6 +3,7 @@ package com.realmmc.core;
 import com.realmmc.core.combatLog.*;
 import com.realmmc.core.commands.*;
 import com.realmmc.core.listeners.*;
+import com.realmmc.core.manager.combatStatsManager;
 import com.realmmc.core.manager.spawnManager;
 import com.realmmc.core.manager.warpManager;
 import com.realmmc.core.utils.playerNameUtils;

@@ -1,6 +1,6 @@
 package com.realmmc.core.combatLog;
 
-import com.realmmc.core.combatLog.combatStatsManager;
+import com.realmmc.core.manager.combatStatsManager;
 import com.realmmc.core.utils.playerNameUtils;
 import com.realmmc.core.utils.soundUtils;
 import net.md_5.bungee.api.ChatMessageType;

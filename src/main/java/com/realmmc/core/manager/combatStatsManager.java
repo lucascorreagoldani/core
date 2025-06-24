@@ -1,13 +1,13 @@
-package com.realmmc.core.combatLog;
+package com.realmmc.core.manager;
 
-import com.realmmc.core.combatLog.playerCombatInfo;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+
+import com.realmmc.core.combatLog.playerCombatInfo;
 
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 
 public class combatStatsManager {
     private static combatStatsManager instance;
@@ -23,20 +23,17 @@ public class combatStatsManager {
         return instance;
     }
 
-    // Método para registrar entrada em combate
     public void recordCombatEntry(UUID playerId, UUID opponentId) {
         playerCombatInfo info = combatStats.computeIfAbsent(playerId, k -> new playerCombatInfo());
         info.setLastOpponent(opponentId);
         info.setLastCombatTime(dateFormat.format(new Date()));
     }
 
-    // Novo método: registrar início de combate
     public void recordCombatStart(UUID playerId) {
         playerCombatInfo info = combatStats.computeIfAbsent(playerId, k -> new playerCombatInfo());
         info.incrementCombatEntries();
     }
 
-    // Novo método: adicionar tempo de combate
     public void recordCombatTime(UUID playerId, long milliseconds) {
         playerCombatInfo info = combatStats.computeIfAbsent(playerId, k -> new playerCombatInfo());
         info.addCombatTime(milliseconds);
@@ -56,7 +53,6 @@ public class combatStatsManager {
     public void sendCombatInfo(Player player) {
         playerCombatInfo info = getPlayerInfo(player.getUniqueId());
 
-        // Formatar tempo total
         long totalSeconds = info.getTotalCombatTime() / 1000;
         long hours = totalSeconds / 3600;
         long minutes = (totalSeconds % 3600) / 60;
@@ -67,7 +63,7 @@ public class combatStatsManager {
         player.sendMessage("§fEntradas em combate: §a" + info.getCombatEntries());
         player.sendMessage("§fTempo total em combate: §a" + formattedTime);
         player.sendMessage("§fDesconexões em combate: §c" + info.getDisconnectCount());
-        
+
         if (info.getLastOpponent() != null) {
             Player opponent = Bukkit.getPlayer(info.getLastOpponent());
             String opponentName = opponent != null ? opponent.getName() : "Offline";
