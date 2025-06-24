@@ -13,7 +13,7 @@ import java.util.*;
 
 public final class teleportUtils {
     private static final String PERMISSAO_BYPASS = "core.vip";
-    private static final int TEMPO_COOLDOWN = 30; // segundos
+    private static final int TEMPO_COOLDOWN = 5; // segundos
     private static final int TELEPORT_DELAY = 5;  // segundos
 
     private static final String MSG_EM_COMBATE = ChatColor.RED + "Você não pode teleportar em combate!";
