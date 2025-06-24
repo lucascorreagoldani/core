@@ -13,6 +13,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import net.md_5.bungee.api.ChatColor;
 import net.md_5.bungee.api.chat.*;
+
+import java.net.http.WebSocket.Listener;
 import java.util.*;
 
 /**
@@ -23,7 +25,7 @@ import java.util.*;
  *
  * @author github.com/lucascorreagoldani
  */
-public final class warp implements CommandExecutor {
+public final class warp implements CommandExecutor, Listener {
 
     private final warpManager warpManager;
     private final FileConfiguration config;

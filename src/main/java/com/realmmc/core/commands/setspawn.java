@@ -1,17 +1,18 @@
 package com.realmmc.core.commands;
 
+import com.realmmc.core.manager.spawnManager;
 import com.realmmc.core.utils.soundUtils;
 import org.bukkit.*;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
-import org.bukkit.command.CommandSender;
-import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.command.*;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
+/**
+ * Comando para definir o spawn global do servidor.
+ */
 public final class setspawn implements CommandExecutor {
 
-    private final FileConfiguration config;
+    private final spawnManager spawnManager;
     private final Plugin plugin;
 
     private static final String APENAS_JOGADORES = ChatColor.RED + "Apenas jogadores podem executar esse comando.";
@@ -21,8 +22,8 @@ public final class setspawn implements CommandExecutor {
     private static final String ERRO_SALVAR = ChatColor.RED + "Erro ao salvar configuração: ";
     private static final String SUCESSO = ChatColor.GREEN + "Spawn definido com sucesso no mundo '%s'!";
 
-    public setspawn(FileConfiguration config, Plugin plugin) {
-        this.config = config;
+    public setspawn(spawnManager spawnManager, Plugin plugin) {
+        this.spawnManager = spawnManager;
         this.plugin = plugin;
     }
 
@@ -34,73 +35,38 @@ public final class setspawn implements CommandExecutor {
         }
 
         Player jogador = (Player) sender;
-
-        if (!verificarPermissao(jogador)) {
+        if (!jogador.hasPermission("core.manager")) {
+            enviarMensagemErro(jogador, PERMISSAO_NECESSARIA);
+            soundUtils.reproduzirErro(jogador);
             return true;
         }
 
         Location localizacao = jogador.getLocation();
-        if (!validarLocalizacao(jogador, localizacao)) {
+        World mundo = localizacao.getWorld();
+        if (mundo == null) {
+            enviarMensagemErro(jogador, MUNDO_INVALIDO);
+            soundUtils.reproduzirErro(jogador);
+            return true;
+        }
+        if (Bukkit.getWorld(mundo.getName()) == null) {
+            enviarMensagemErro(jogador, MUNDO_INEXISTENTE);
+            soundUtils.reproduzirErro(jogador);
             return true;
         }
 
-        definirSpawn(localizacao);
+        spawnManager.setSpawn(localizacao);
 
-        if (!salvarConfiguracao(jogador)) {
+        try {
+            plugin.saveConfig();
+        } catch (Exception e) {
+            enviarMensagemErro(jogador, ERRO_SALVAR + e.getMessage());
+            soundUtils.reproduzirErro(jogador);
             return true;
         }
 
         enviarMensagemSucesso(jogador, String.format(SUCESSO, localizacao.getWorld().getName()));
         soundUtils.reproduzirSucesso(jogador);
-
         return true;
-    }
-
-    private boolean verificarPermissao(Player jogador) {
-        if (!jogador.hasPermission("core.manager")) {
-            enviarMensagemErro(jogador, PERMISSAO_NECESSARIA);
-            soundUtils.reproduzirErro(jogador);
-            return false;
-        }
-        return true;
-    }
-
-    private boolean validarLocalizacao(Player jogador, Location localizacao) {
-        World mundo = localizacao.getWorld();
-        
-        if (mundo == null) {
-            enviarMensagemErro(jogador, MUNDO_INVALIDO);
-            soundUtils.reproduzirErro(jogador);
-            return false;
-        }
-
-        if (Bukkit.getWorld(mundo.getName()) == null) {
-            enviarMensagemErro(jogador, MUNDO_INEXISTENTE);
-            soundUtils.reproduzirErro(jogador);
-            return false;
-        }
-
-        return true;
-    }
-
-    private void definirSpawn(Location localizacao) {
-        config.set("spawn.world", localizacao.getWorld().getName());
-        config.set("spawn.x", localizacao.getX());
-        config.set("spawn.y", localizacao.getY());
-        config.set("spawn.z", localizacao.getZ());
-        config.set("spawn.yaw", localizacao.getYaw());
-        config.set("spawn.pitch", localizacao.getPitch());
-    }
-
-    private boolean salvarConfiguracao(Player jogador) {
-        try {
-            plugin.saveConfig();
-            return true;
-        } catch (Exception e) {
-            enviarMensagemErro(jogador, ERRO_SALVAR + e.getMessage());
-            soundUtils.reproduzirErro(jogador);
-            return false;
-        }
     }
 
     private void enviarMensagemErro(CommandSender sender, String mensagem) {

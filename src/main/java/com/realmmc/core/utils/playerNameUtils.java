@@ -164,7 +164,7 @@ public final class playerNameUtils {
      * @param name Nome do jogador.
      * @return Jogador online, ou null se não encontrado.
      */
-    private static Player getOnlinePlayer(String name) {
+    public static Player getOnlinePlayer(String name) {
         return Bukkit.getPlayer(name);
     }
 

@@ -112,4 +112,12 @@ public class warpManager {
         }
         return null;
     }
+
+    // ...
+    /**
+     * Remove uma warp pelo nome interno.
+     */
+    public void removeWarp(String warpName) {
+        config.set("warps." + warpName, null);
+    }
 }
