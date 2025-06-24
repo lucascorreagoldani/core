@@ -3,6 +3,7 @@ package com.realmmc.core;
 import com.realmmc.core.combatLog.*;
 import com.realmmc.core.commands.*;
 import com.realmmc.core.listeners.*;
+import com.realmmc.core.manager.warpManager;
 import com.realmmc.core.utils.playerNameUtils;
 import net.luckperms.api.LuckPerms;
 import org.bukkit.Bukkit;
@@ -17,8 +18,14 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.util.logging.Level;
 
+/**
+ * Plugin principal do servidor. Centraliza inicialização, registro de comandos, listeners e sistemas.
+ *
+ * @author github.com/lucascorreagoldani
+ */
 public final class Main extends JavaPlugin {
     private FileConfiguration config;
+    private warpManager warpManager;
 
     @Override
     public void onEnable() {
@@ -26,6 +33,7 @@ public final class Main extends JavaPlugin {
         try {
             if (!getDataFolder().exists()) getDataFolder().mkdirs();
             carregarConfiguracao();
+            inicializarWarpManager();
             inicializarLuckPerms();
             registrarComandos();
             registrarListeners();
@@ -61,6 +69,10 @@ public final class Main extends JavaPlugin {
         config = YamlConfiguration.loadConfiguration(configFile);
     }
 
+    private void inicializarWarpManager() {
+        this.warpManager = new warpManager(config);
+    }
+
     private void inicializarLuckPerms() {
         if (Bukkit.getPluginManager().getPlugin("LuckPerms") != null) {
             RegisteredServiceProvider<LuckPerms> provider = Bukkit.getServicesManager().getRegistration(LuckPerms.class);
@@ -78,17 +90,14 @@ public final class Main extends JavaPlugin {
             getCommand("setwarp").setExecutor(new setwarp(config, this));
             getCommand("delwarp").setExecutor(new delwarp(config, this));
             getCommand("setspawn").setExecutor(new setspawn(config, this));
-            
-            // REGISTRO CORRETO DO TELEPORTE
-            getCommand("tp").setExecutor(new teleport(this)); // Passa a instância do plugin
+            getCommand("tp").setExecutor(new teleport(this));
 
             spawn spawnCommand = new spawn(config, this);
             getCommand("spawn").setExecutor(spawnCommand);
             getServer().getPluginManager().registerEvents(spawnCommand, this);
 
-            warp warpCommand = new warp(config, this);
+            warp warpCommand = new warp(config, this); // Remove warpManager if not required by constructor
             getCommand("warp").setExecutor(warpCommand);
-            getServer().getPluginManager().registerEvents(warpCommand, this);
         } catch (Exception e) {
             getLogger().severe("Erro ao registrar comandos: " + e.getMessage());
             e.printStackTrace();
@@ -99,6 +108,7 @@ public final class Main extends JavaPlugin {
         try {
             getServer().getPluginManager().registerEvents(new combatLog(this), this);
             getServer().getPluginManager().registerEvents(new playerJoinListener(this), this);
+            getServer().getPluginManager().registerEvents(new teleportMoveListener(), this);
         } catch (Exception e) {
             getLogger().severe("Erro ao registrar listeners: " + e.getMessage());
             e.printStackTrace();
@@ -111,6 +121,10 @@ public final class Main extends JavaPlugin {
 
     public FileConfiguration getConfig() {
         return config;
+    }
+
+    public warpManager getWarpManager() {
+        return warpManager;
     }
 
     @Override

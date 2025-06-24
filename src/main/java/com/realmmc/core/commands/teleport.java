@@ -10,6 +10,17 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
+import java.util.Optional;
+import java.util.UUID;
+
+/**
+ * Comando staff /tp:
+ * /tp <jogador>        - teleporta o executor até o jogador (moderador+)
+ * /tp <jogador> <alvo> - teleporta um jogador até outro (admin+)
+ *
+ * Usa playerNameUtils (com cache, async, LuckPerms) e soundUtils.
+ * Teleporte é instantâneo, sem delay/cancelamento.
+ */
 public final class teleport implements CommandExecutor {
 
     private final Main plugin;
@@ -19,11 +30,11 @@ public final class teleport implements CommandExecutor {
     private static final String USO_CORRETO = ChatColor.RED + "Utilize: /tp <jogador> [jogador]";
     private static final String TP_PARA_SI = ChatColor.RED + "Você não pode se teleportar até você mesmo.";
     private static final String TP_MESMO_JOGADOR = ChatColor.RED + "Não é possível teleportar um jogador até ele mesmo.";
-    private static final String TP_SUCESSO = ChatColor.GREEN + "Você foi teleportado até o jogador " + "%s" + ChatColor.GREEN + ".";
-    private static final String TP_PUXOU_JOGADOR = ChatColor.GREEN + "Você puxou o jogador " + "%s" + ChatColor.GREEN + " até você!";
-    private static final String TP_OUTRO_SUCESSO = ChatColor.GREEN + "Você teleportou o jogador " + "%s" + ChatColor.GREEN + " até o jogador " + "%s" + ChatColor.GREEN + ".";
-    private static final String JOGADOR_OFFLINE = ChatColor.RED + "O jogador " + "%s" + ChatColor.RED + " está offline no momento!";
-    private static final String JOGADOR_INEXISTENTE = ChatColor.RED + "O jogador " + "%s" + ChatColor.RED + " nunca entrou no servidor!";
+    private static final String TP_SUCESSO = ChatColor.GREEN + "Você foi teleportado até o jogador %s" + ChatColor.GREEN + ".";
+    private static final String TP_PUXOU_JOGADOR = ChatColor.GREEN + "Você puxou o jogador %s" + ChatColor.GREEN + " até você!";
+    private static final String TP_OUTRO_SUCESSO = ChatColor.GREEN + "Você teleportou o jogador %s" + ChatColor.GREEN + " até o jogador %s" + ChatColor.GREEN + ".";
+    private static final String JOGADOR_OFFLINE = ChatColor.RED + "O jogador %s está offline no momento!";
+    private static final String JOGADOR_INEXISTENTE = ChatColor.RED + "O jogador %s nunca entrou no servidor!";
     private static final String TP_OUTRO_PERMISSAO = ChatColor.RED + "Apenas Administrador ou superiores podem executar esse comando!";
 
     public teleport(Main plugin) {
@@ -42,11 +53,14 @@ public final class teleport implements CommandExecutor {
             return true;
         }
 
-        return args.length == 1 
-            ? teleportSelf(sender, args[0]) 
-            : teleportOther(sender, args[0], args[1]);
+        if (args.length == 1) {
+            return teleportSelf(sender, args[0]);
+        } else {
+            return teleportOther(sender, args[0], args[1]);
+        }
     }
 
+    // /tp <jogador>
     private boolean teleportSelf(CommandSender sender, String targetName) {
         if (!(sender instanceof Player)) {
             sendMessage(sender, CONSOLE_BLOQUEADO, true);
@@ -54,15 +68,18 @@ public final class teleport implements CommandExecutor {
         }
 
         Player player = (Player) sender;
-        
-        if (!playerNameUtils.playerExists(targetName)) {
-            sendMessage(sender, String.format(JOGADOR_INEXISTENTE, targetName), true);
-            return true;
-        }
 
-        Player target = playerNameUtils.getOnlinePlayer(targetName);
+        Player target = Bukkit.getPlayerExact(targetName);
         if (target == null) {
-            handleOfflinePlayer(sender, targetName);
+            // Checa se o nome já jogou alguma vez no servidor
+            Optional<UUID> uuidOpt = getPlayerUUID(targetName);
+            if (!uuidOpt.isPresent()) {
+                sendMessage(sender, String.format(JOGADOR_INEXISTENTE, targetName), true);
+            } else {
+                playerNameUtils.getFormattedOfflineName(targetName).thenAccept(formattedName -> {
+                    sendMessage(sender, String.format(JOGADOR_OFFLINE, formattedName), true);
+                });
+            }
             return true;
         }
 
@@ -75,44 +92,49 @@ public final class teleport implements CommandExecutor {
         return true;
     }
 
+    // /tp <jogador> <alvo>
     private boolean teleportOther(CommandSender sender, String playerName, String targetName) {
         if (!sender.hasPermission("core.administrator")) {
             sendMessage(sender, TP_OUTRO_PERMISSAO, true);
             return true;
         }
 
-        if (!playerNameUtils.playerExists(playerName)) {
-            sendMessage(sender, String.format(JOGADOR_INEXISTENTE, playerName), true);
-            return true;
-        }
-
-        if (!playerNameUtils.playerExists(targetName)) {
-            sendMessage(sender, String.format(JOGADOR_INEXISTENTE, targetName), true);
-            return true;
-        }
-
-        Player player = playerNameUtils.getOnlinePlayer(playerName);
-        Player target = playerNameUtils.getOnlinePlayer(targetName);
+        Player player = Bukkit.getPlayerExact(playerName);
+        Player target = Bukkit.getPlayerExact(targetName);
 
         if (player == null) {
-            handleOfflinePlayer(sender, playerName);
+            Optional<UUID> uuidOpt = getPlayerUUID(playerName);
+            if (!uuidOpt.isPresent()) {
+                sendMessage(sender, String.format(JOGADOR_INEXISTENTE, playerName), true);
+            } else {
+                playerNameUtils.getFormattedOfflineName(playerName).thenAccept(formattedName -> {
+                    sendMessage(sender, String.format(JOGADOR_OFFLINE, formattedName), true);
+                });
+            }
             return true;
         }
-
         if (target == null) {
-            handleOfflinePlayer(sender, targetName);
+            Optional<UUID> uuidOpt = getPlayerUUID(targetName);
+            if (!uuidOpt.isPresent()) {
+                sendMessage(sender, String.format(JOGADOR_INEXISTENTE, targetName), true);
+            } else {
+                playerNameUtils.getFormattedOfflineName(targetName).thenAccept(formattedName -> {
+                    sendMessage(sender, String.format(JOGADOR_OFFLINE, formattedName), true);
+                });
+            }
             return true;
         }
-
         if (player.equals(target)) {
             sendMessage(sender, TP_MESMO_JOGADOR, true);
             return true;
         }
 
-        // Special case when target is "você" or sender is the target
-        if (sender instanceof Player && (targetName.equalsIgnoreCase("você") || 
-                                        targetName.equalsIgnoreCase("voce") || 
-                                        ((Player)sender).equals(target))) {
+        // Se admin faz /tp <alvo> você, puxa o player até si
+        if (sender instanceof Player && (
+                targetName.equalsIgnoreCase("você") ||
+                targetName.equalsIgnoreCase("voce") ||
+                ((Player)sender).equals(target)
+        )) {
             executePullPlayer(player, (Player)sender);
             return true;
         }
@@ -121,22 +143,14 @@ public final class teleport implements CommandExecutor {
         return true;
     }
 
-    private void executePullPlayer(Player toMove, Player target) {
-        toMove.teleport(target);
-        String formattedToMove = playerNameUtils.getFormattedName(toMove);
-        sendMessage(target, String.format(TP_PUXOU_JOGADOR, formattedToMove), false);
-        soundUtils.reproduzirSucesso(toMove);
-        soundUtils.reproduzirSucesso(target);
-    }
-
-    private void handleOfflinePlayer(CommandSender sender, String playerName) {
-        String correctName = playerNameUtils.getCorrectName(playerName);
-        if (correctName == null || !playerNameUtils.playerExists(correctName)) {
-            sendMessage(sender, String.format(JOGADOR_INEXISTENTE, playerName), true);
-        } else {
-            playerNameUtils.getFormattedOfflineNameAsync(correctName, formattedName -> {
-                sendMessage(sender, String.format(JOGADOR_OFFLINE, formattedName), true);
-            });
+    private static Optional<UUID> getPlayerUUID(String name) {
+        try {
+            // Usa o método utilitário correto do Bukkit (offline)
+            return Optional.ofNullable(Bukkit.getOfflinePlayer(name))
+                    .filter(p -> p.hasPlayedBefore() || p.isOnline())
+                    .map(offline -> offline.getUniqueId());
+        } catch (Exception e) {
+            return Optional.empty();
         }
     }
 
@@ -156,6 +170,14 @@ public final class teleport implements CommandExecutor {
         if (initiator instanceof Player && !initiator.equals(toMove)) {
             soundUtils.reproduzirSucesso((Player) initiator);
         }
+    }
+
+    private void executePullPlayer(Player toMove, Player target) {
+        toMove.teleport(target);
+        String formattedToMove = playerNameUtils.getFormattedName(toMove);
+        sendMessage(target, String.format(TP_PUXOU_JOGADOR, formattedToMove), false);
+        soundUtils.reproduzirSucesso(toMove);
+        soundUtils.reproduzirSucesso(target);
     }
 
     private void sendMessage(CommandSender sender, String message, boolean isError) {

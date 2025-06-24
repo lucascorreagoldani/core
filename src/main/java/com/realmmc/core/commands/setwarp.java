@@ -1,19 +1,25 @@
 package com.realmmc.core.commands;
 
+import com.realmmc.core.manager.warpManager;
 import com.realmmc.core.utils.soundUtils;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
-import org.bukkit.command.CommandSender;
+import org.bukkit.command.*;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import java.util.Arrays;
-import org.bukkit.Bukkit;
 
+/**
+ * Comando para criar e atualizar warps.
+ * Usa WarpManager para evitar duplicidade de código.
+ *
+ * @author github.com/lucascorreagoldani
+ */
 public final class setwarp implements CommandExecutor {
 
+    private final warpManager warpManager;
     private final FileConfiguration config;
     private final Plugin plugin;
 
@@ -31,6 +37,7 @@ public final class setwarp implements CommandExecutor {
     public setwarp(FileConfiguration config, Plugin plugin) {
         this.config = config;
         this.plugin = plugin;
+        this.warpManager = new warpManager(config);
     }
 
     @Override
@@ -63,11 +70,9 @@ public final class setwarp implements CommandExecutor {
 
         // Processar argumentos
         if (args.length > 1) {
-            // Verificar se o último argumento parece ser uma permissão (contém ponto ou palavra-chave)
             String lastArg = args[args.length - 1];
             if (lastArg.contains(".") || lastArg.contains("permission") || lastArg.startsWith("core.")) {
                 permission = lastArg;
-                // Se houver mais de 2 argumentos, o displayname é o que está no meio
                 if (args.length > 2) {
                     displayName = String.join(" ", Arrays.copyOfRange(args, 1, args.length - 1));
                 } else {
@@ -78,25 +83,10 @@ public final class setwarp implements CommandExecutor {
             }
         }
 
-        // Verificar se a warp já existe
         boolean warpExiste = config.contains("warps." + warpName);
-        boolean displayNameExiste = false;
-        String warpExistenteComDisplayName = null;
 
-        // Verificar se já existe uma warp com esse displayname
-        if (config.getConfigurationSection("warps") != null) {
-            for (String key : config.getConfigurationSection("warps").getKeys(false)) {
-                String existingDisplay = config.getString("warps." + key + ".display");
-                if (existingDisplay != null && existingDisplay.equalsIgnoreCase(displayName) && !key.equalsIgnoreCase(warpName)) {
-                    displayNameExiste = true;
-                    warpExistenteComDisplayName = key;
-                    break;
-                }
-            }
-        }
-
-        // Se já existe uma warp com esse displayname (e não é a mesma warp), cancelar
-        if (displayNameExiste && warpExistenteComDisplayName != null && !warpExistenteComDisplayName.equalsIgnoreCase(warpName)) {
+        String warpExistenteComDisplayName = warpManager.existsDisplayName(displayName, warpName);
+        if (warpExistenteComDisplayName != null) {
             sender.sendMessage(ChatColor.RED + "Já existe uma warp com o displayname '" + displayName + "' (warp: " + warpExistenteComDisplayName + ")");
             if (sender instanceof Player) {
                 soundUtils.reproduzirErro((Player) sender);
@@ -108,64 +98,31 @@ public final class setwarp implements CommandExecutor {
         String path = "warps." + warpName;
 
         if (warpExiste) {
-            // Atualizar warp existente
             String oldDisplayName = config.getString(path + ".display", warpName);
             String oldPermission = config.getString(path + ".permission");
-            Location oldLocation = getWarpLocation(warpName);
+            Location oldLocation = warpManager.getWarpLocation(warpName);
 
-            boolean displayNameAlterado = false;
-            boolean localizacaoAlterada = false;
-            boolean permissaoAlterada = false;
-
-            // Verificar se o displayname foi alterado
             if (!oldDisplayName.equalsIgnoreCase(displayName)) {
-                displayNameAlterado = true;
                 sender.sendMessage(String.format(DISPLAYNAME_ALTERADO, oldDisplayName, displayName));
             }
-
-            // Verificar se a permissão foi alterada
             if (permission == null && oldPermission != null) {
-                permissaoAlterada = true;
                 sender.sendMessage(PERMISSAO_REMOVIDA);
             } else if (permission != null && !permission.equals(oldPermission)) {
-                permissaoAlterada = true;
                 if (oldPermission == null) {
                     sender.sendMessage(String.format(PERMISSAO_ADICIONADA, permission));
                 } else {
                     sender.sendMessage(String.format(PERMISSAO_ALTERADA, oldPermission, permission));
                 }
             }
-
-            // Verificar se a localização foi alterada
             if (!locationsEqual(oldLocation, location)) {
-                localizacaoAlterada = true;
                 sender.sendMessage(LOCALIZACAO_ALTERADA);
             }
-
-            // Atualizar os dados
-            config.set(path + ".world", location.getWorld().getName());
-            config.set(path + ".x", location.getX());
-            config.set(path + ".y", location.getY());
-            config.set(path + ".z", location.getZ());
-            config.set(path + ".yaw", location.getYaw());
-            config.set(path + ".pitch", location.getPitch());
-            config.set(path + ".display", displayName);
-            config.set(path + ".permission", permission);
-
+            warpManager.setWarp(warpName, displayName, permission, location);
             plugin.saveConfig();
             sender.sendMessage(String.format(SUCESSO_ATUALIZACAO, displayName));
             soundUtils.reproduzirSucesso(player);
         } else {
-            // Criar nova warp
-            config.set(path + ".world", location.getWorld().getName());
-            config.set(path + ".x", location.getX());
-            config.set(path + ".y", location.getY());
-            config.set(path + ".z", location.getZ());
-            config.set(path + ".yaw", location.getYaw());
-            config.set(path + ".pitch", location.getPitch());
-            config.set(path + ".display", displayName);
-            config.set(path + ".permission", permission);
-
+            warpManager.setWarp(warpName, displayName, permission, location);
             plugin.saveConfig();
             sender.sendMessage(String.format(SUCESSO_CRIACAO, displayName));
             if (permission != null) {
@@ -173,31 +130,16 @@ public final class setwarp implements CommandExecutor {
             }
             soundUtils.reproduzirSucesso(player);
         }
-
         return true;
-    }
-
-    private Location getWarpLocation(String warpName) {
-        String path = "warps." + warpName;
-        if (!config.contains(path + ".world")) return null;
-
-        return new Location(
-            Bukkit.getWorld(config.getString(path + ".world")),
-            config.getDouble(path + ".x"),
-            config.getDouble(path + ".y"),
-            config.getDouble(path + ".z"),
-            (float) config.getDouble(path + ".yaw"),
-            (float) config.getDouble(path + ".pitch")
-        );
     }
 
     private boolean locationsEqual(Location loc1, Location loc2) {
         if (loc1 == null || loc2 == null) return false;
         return loc1.getWorld().equals(loc2.getWorld()) &&
-               loc1.getX() == loc2.getX() &&
-               loc1.getY() == loc2.getY() &&
-               loc1.getZ() == loc2.getZ() &&
-               loc1.getYaw() == loc2.getYaw() &&
-               loc1.getPitch() == loc2.getPitch();
+                loc1.getX() == loc2.getX() &&
+                loc1.getY() == loc2.getY() &&
+                loc1.getZ() == loc2.getZ() &&
+                loc1.getYaw() == loc2.getYaw() &&
+                loc1.getPitch() == loc2.getPitch();
     }
 }
