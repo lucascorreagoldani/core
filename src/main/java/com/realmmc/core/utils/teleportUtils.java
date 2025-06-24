@@ -1,0 +1,147 @@
+package com.realmmc.core.utils;
+
+import com.realmmc.core.combatLog.combatLog; // Certifique-se de importar corretamente!
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.Location;
+import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
+import org.bukkit.scheduler.BukkitRunnable;
+
+import java.util.*;
+
+public final class teleportUtils {
+    private static final String PERMISSAO_BYPASS = "core.vip";
+    private static final int TEMPO_COOLDOWN = 30; // segundos
+    private static final int TELEPORT_DELAY = 5;  // segundos
+
+    private static final String MSG_EM_COMBATE = ChatColor.RED + "Você não pode teleportar em combate!";
+    private static final String MSG_TELEPORTE_ATIVO = ChatColor.RED + "Você já tem um teleporte em andamento!";
+    private static final String MSG_COOLDOWN = ChatColor.RED + "Aguarde %d segundos para se teleportar novamente!";
+    private static final String MSG_CANCELADO = ChatColor.RED + "Seu teleporte foi cancelado porque você se moveu!";
+    private static final String MSG_DELAY = ChatColor.YELLOW + "Você será teleportado em %d segundos. Não ande!";
+    private static final String MSG_SUCESSO = ChatColor.GREEN + "Teleportado com sucesso!";
+
+    // Jogadores aguardando teleporte
+    private static final Set<UUID> teleportando = Collections.synchronizedSet(new HashSet<>());
+    // Cooldowns de teleporte
+    private static final Map<UUID, Long> cooldowns = Collections.synchronizedMap(new HashMap<>());
+    // Bloco inicial de cada teleporte
+    private static final Map<UUID, Location> blocosIniciais = Collections.synchronizedMap(new HashMap<>());
+
+    private teleportUtils() { throw new AssertionError("Não instancie!"); }
+
+    /**
+     * Inicia o processo de teleporte com delay, cooldown, e verificação de combate/movimento de bloco.
+     * @param plugin   Instância do plugin principal.
+     * @param jogador  Jogador a ser teleportado.
+     * @param destino  Local de destino.
+     * @param combatLog Instância do combatLog para verificação de combate.
+     */
+    public static void iniciarTeleporte(Plugin plugin, Player jogador, Location destino, combatLog combatLog) {
+        UUID uuid = jogador.getUniqueId();
+
+        // 1. Verifica se está em combate
+        if (combatLog != null && combatLog.isPlayerInCombat(uuid)) {
+            jogador.sendMessage(MSG_EM_COMBATE);
+            soundUtils.reproduzirErro(jogador);
+            return;
+        }
+
+        // 2. Verifica teleporte ativo
+        if (teleportando.contains(uuid)) {
+            jogador.sendMessage(MSG_TELEPORTE_ATIVO);
+            soundUtils.reproduzirErro(jogador);
+            return;
+        }
+
+        // 3. Verifica cooldown (se não for VIP)
+        if (!jogador.hasPermission(PERMISSAO_BYPASS)) {
+            long agora = System.currentTimeMillis();
+            if (cooldowns.containsKey(uuid)) {
+                long restante = (cooldowns.get(uuid) - agora) / 1000;
+                if (restante > 0) {
+                    jogador.sendMessage(String.format(MSG_COOLDOWN, restante));
+                    soundUtils.reproduzirErro(jogador);
+                    return;
+                }
+            }
+        }
+
+        // 4. Salva o bloco inicial (apenas X/Y/Z inteiros, ignora rotação)
+        Location blocoInicial = jogador.getLocation().clone();
+        blocoInicial.setX(Math.floor(blocoInicial.getX()));
+        blocoInicial.setY(Math.floor(blocoInicial.getY()));
+        blocoInicial.setZ(Math.floor(blocoInicial.getZ()));
+        blocosIniciais.put(uuid, blocoInicial);
+        teleportando.add(uuid);
+
+        jogador.sendMessage(String.format(MSG_DELAY, TELEPORT_DELAY));
+        soundUtils.reproduzirContagem(jogador);
+
+        // 5. Espera o delay e verifica se o jogador não andou de bloco
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (!teleportando.contains(uuid)) return; // já cancelado
+
+                Location atual = jogador.getLocation().clone();
+                atual.setX(Math.floor(atual.getX()));
+                atual.setY(Math.floor(atual.getY()));
+                atual.setZ(Math.floor(atual.getZ()));
+
+                Location inicial = blocosIniciais.get(uuid);
+
+                if (!mesmoBloco(atual, inicial)) {
+                    teleportando.remove(uuid);
+                    blocosIniciais.remove(uuid);
+                    jogador.sendMessage(MSG_CANCELADO);
+                    soundUtils.reproduzirErro(jogador);
+                    return;
+                }
+
+                // Teleporta
+                teleportando.remove(uuid);
+                blocosIniciais.remove(uuid);
+                jogador.teleport(destino);
+                jogador.sendMessage(MSG_SUCESSO);
+                soundUtils.reproduzirSucesso(jogador);
+
+                // Define cooldown se não for VIP
+                if (!jogador.hasPermission(PERMISSAO_BYPASS)) {
+                    cooldowns.put(uuid, System.currentTimeMillis() + (TEMPO_COOLDOWN * 1000L));
+                }
+            }
+        }.runTaskLater(plugin, TELEPORT_DELAY * 20L);
+    }
+
+    /**
+     * Cancela o teleporte do jogador caso esteja em andamento.
+     * @param jogador Jogador.
+     */
+    public static void cancelarTeleporte(Player jogador) {
+        UUID uuid = jogador.getUniqueId();
+        if (teleportando.contains(uuid)) {
+            teleportando.remove(uuid);
+            blocosIniciais.remove(uuid);
+            jogador.sendMessage(MSG_CANCELADO);
+            soundUtils.reproduzirErro(jogador);
+        }
+    }
+
+    /**
+     * Checa se o jogador está em teleporte.
+     * @param jogador Jogador.
+     * @return true se estiver aguardando teleporte.
+     */
+    public static boolean estaTeleportando(Player jogador) {
+        return teleportando.contains(jogador.getUniqueId());
+    }
+
+    private static boolean mesmoBloco(Location loc1, Location loc2) {
+        return loc1.getWorld().equals(loc2.getWorld())
+                && loc1.getBlockX() == loc2.getBlockX()
+                && loc1.getBlockY() == loc2.getBlockY()
+                && loc1.getBlockZ() == loc2.getBlockZ();
+    }
+}

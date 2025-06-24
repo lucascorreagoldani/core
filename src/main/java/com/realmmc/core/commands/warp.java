@@ -208,12 +208,6 @@ public final class warp implements CommandExecutor, Listener {
         }
 
         // Verificação melhorada de existência do jogador
-        if (!playerNameUtils.playerExists(nomeAlvo)) {
-            enviarMensagemErro(sender, String.format(JOGADOR_INEXISTENTE, nomeAlvo));
-            return true;
-        }
-
-        // Alteração crítica: usar getPlayerExact em vez de getPlayer
         Player alvo = Bukkit.getPlayerExact(nomeAlvo);
         if (alvo != null) {
             // Obter nome formatado do jogador online
@@ -240,14 +234,17 @@ public final class warp implements CommandExecutor, Listener {
                 soundUtils.reproduzirSucesso((Player) sender);
             }
             return true;
+        } else {
+            // Jogador existe mas está offline ou nunca entrou
+            playerNameUtils.getFormattedOfflineName(nomeAlvo).thenAccept(nomeFormatado -> {
+                if (nomeFormatado == null) {
+                    enviarMensagemErro(sender, String.format(JOGADOR_INEXISTENTE, nomeAlvo));
+                } else {
+                    enviarMensagemErro(sender, String.format(JOGADOR_OFFLINE, nomeFormatado));
+                }
+            });
+            return true;
         }
-
-        // Jogador existe mas está offline
-        playerNameUtils.getFormattedOfflineName(nomeAlvo).thenAccept(nomeFormatado -> {
-            enviarMensagemErro(sender, String.format(JOGADOR_OFFLINE, nomeFormatado));
-        });
-
-        return true;
     }
 
     private String obterNomeInternoWarp(String warpIdentifier) {

@@ -66,7 +66,7 @@ public final class Main extends JavaPlugin {
             RegisteredServiceProvider<LuckPerms> provider = Bukkit.getServicesManager().getRegistration(LuckPerms.class);
             if (provider != null) {
                 playerNameUtils.init(provider.getProvider());
-                playerNameUtils.setPluginInstance(this); // Configura a instância do plugin
+                // playerNameUtils.setPluginInstance(this); // Configura a instância do plugin
             }
         }
     }

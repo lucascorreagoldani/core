@@ -97,38 +97,43 @@ public final class playerNameUtils {
     }
 
     /**
-     * Obtém o nome formatado de um jogador offline.
+     * Obtém o nome formatado de um jogador offline ou que nunca entrou.
+     * <p>
+     * Se o jogador nunca entrou no servidor (ou seja, não existe UUID conhecido ou nunca jogou),
+     * retorna apenas o nome puro informado, sem prefixo ou sufixo.
+     * Não tenta buscar dados no LuckPerms para jogadores desconhecidos.
      *
      * @param name Nome do jogador.
-     * @return CompletableFuture com o nome formatado.
+     * @return CompletableFuture com o nome formatado, ou apenas o nome caso não exista.
      */
     public static CompletableFuture<String> getFormattedOfflineName(String name) {
         if (name == null) return CompletableFuture.completedFuture("");
-
         // Tenta encontrar o jogador online primeiro
         Player onlinePlayer = getOnlinePlayer(name);
         if (onlinePlayer != null) {
             return CompletableFuture.completedFuture(getFormattedName(onlinePlayer));
         }
-
-        // Verifica o cache
+        // Busca o UUID do jogador offline
         Optional<UUID> uuidOpt = getPlayerUUID(name);
         if (!uuidOpt.isPresent()) {
+            // Jogador nunca entrou: retorna nome puro, sem prefixo/sufixo
             return CompletableFuture.completedFuture(name);
         }
-
         UUID uuid = uuidOpt.get();
         if (formattedNameCache.containsKey(uuid)) {
             return CompletableFuture.completedFuture(formattedNameCache.get(uuid));
         }
-
         return CompletableFuture.supplyAsync(() -> {
             if (formattedNameCache.containsKey(uuid)) {
                 return formattedNameCache.get(uuid);
             }
-
-            // Carrega o jogador offline
             OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(uuid);
+
+            // Se o jogador realmente nunca jogou, retorna o nome puro
+            if ((offlinePlayer.getName() == null || offlinePlayer.getName().isEmpty()) &&
+                !offlinePlayer.hasPlayedBefore()) {
+                return name;
+            }
             return getFormattedName(uuid, offlinePlayer.getName());
         });
     }
@@ -142,17 +147,14 @@ public final class playerNameUtils {
      */
     private static String getFormattedName(UUID uuid, String name) {
         if (name == null) return "";
-
         return formattedNameCache.computeIfAbsent(uuid, id -> {
             User user = luckPerms.getUserManager().getUser(id);
             if (user == null) return name;
-
             String prefix = user.getCachedData().getMetaData().getPrefix();
             String suffix = user.getCachedData().getMetaData().getSuffix();
-
-            return (prefix != null ? prefix + " " : "") +
+            return (prefix != null ? prefix : "") +
                    name +
-                   (suffix != null ? " " + suffix : "");
+                   (suffix != null ? suffix : "");
         });
     }
 
@@ -170,48 +172,13 @@ public final class playerNameUtils {
      * Obtém o UUID de um jogador pelo nome.
      *
      * @param name Nome do jogador.
-     * @return UUID do jogador, ou null se não encontrado.
+     * @return Optional com UUID do jogador, ou empty se não encontrado.
      */
     private static Optional<UUID> getPlayerUUID(String name) {
         OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(name);
-        return offlinePlayer.hasPlayedBefore() || offlinePlayer.isOnline()
+        // isOnline = true ou hasPlayedBefore = true indica que existe algum dado
+        return (offlinePlayer.hasPlayedBefore() || offlinePlayer.isOnline())
                ? Optional.of(offlinePlayer.getUniqueId())
                : Optional.empty();
-    }
-
-    /**
-     * Adiciona um prefixo a um jogador.
-     *
-     * @param player Jogador.
-     * @param prefix Prefixo.
-     * @return CompletableFuture com o resultado da operação.
-     */
-    public static CompletableFuture<Boolean> addPrefix(Player player, String prefix) {
-        return CompletableFuture.supplyAsync(() -> {
-            User user = luckPerms.getUserManager().getUser(player.getUniqueId());
-            if (user == null) return false;
-
-            user.data().add(net.luckperms.api.node.types.PrefixNode.builder(prefix, 100).build());
-            luckPerms.getUserManager().saveUser(user);
-            return true;
-        });
-    }
-
-    /**
-     * Adiciona um sufixo a um jogador.
-     *
-     * @param player Jogador.
-     * @param suffix Sufixo.
-     * @return CompletableFuture com o resultado da operação.
-     */
-    public static CompletableFuture<Boolean> addSuffix(Player player, String suffix) {
-        return CompletableFuture.supplyAsync(() -> {
-            User user = luckPerms.getUserManager().getUser(player.getUniqueId());
-            if (user == null) return false;
-
-            user.data().add(net.luckperms.api.node.types.SuffixNode.builder(suffix, 100).build());
-            luckPerms.getUserManager().saveUser(user);
-            return true;
-        });
     }
 }
