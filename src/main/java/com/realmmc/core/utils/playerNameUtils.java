@@ -14,27 +14,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Classe utilitária para manipulação e formatação de nomes de jogadores.
- * Utiliza LuckPerms como base para obter prefixos e sufixos.
- *
- * <p>Recursos:</p>
- * <ul>
- *     <li>Integração com LuckPerms</li>
- *     <li>Cache de nomes formatados</li>
- *     <li>Suporte a prefixos e sufixos</li>
- *     <li>Formatação de nomes offline</li>
- *     <li>Gerenciamento de jogadores nunca vistos</li>
- * </ul>
- *
- * <p>Exemplo de uso:</p>
- * <pre>
- * {@code
- * playerNameUtils.init(luckPermsInstance);
- * String formattedName = playerNameUtils.getFormattedName(player);
- * }
- * </pre>
- *
- * @author Lucas Corrêa
+ * Utilitário para nomes de jogadores com integração LuckPerms.
  */
 public final class playerNameUtils {
 
@@ -48,16 +28,11 @@ public final class playerNameUtils {
 
     /**
      * Inicializa a integração com o LuckPerms.
-     *
-     * @param lp Instância do LuckPerms.
      */
     public static void init(LuckPerms lp) {
         luckPerms = Objects.requireNonNull(lp, "[playerNameUtils] A instância do LuckPerms não pode ser nula");
     }
 
-    /**
-     * Finaliza os recursos utilizados.
-     */
     public static void shutdown() {
         scheduler.shutdown();
         try {
@@ -70,55 +45,59 @@ public final class playerNameUtils {
         }
     }
 
-    /**
-     * Limpa o cache de nomes formatados.
-     */
     public static void clearCache() {
         formattedNameCache.clear();
     }
 
-    /**
-     * Limpa o cache para um jogador específico.
-     *
-     * @param playerId UUID do jogador.
-     */
     public static void clearCache(UUID playerId) {
         formattedNameCache.remove(playerId);
     }
 
+    /** 
+     * Retorna apenas o nome limpo do jogador (sem prefixo/sufixo). Nunca null.
+     */
+    public static String getCleanName(Player player) {
+        if (player == null) return "";
+        return player.getName() != null ? player.getName() : "";
+    }
+
     /**
-     * Obtém o nome formatado de um jogador online.
-     *
-     * @param player Jogador online.
-     * @return Nome formatado.
+     * Retorna o nome formatado do jogador online (com prefixo/sufixo se houver).
      */
     public static String getFormattedName(Player player) {
+        if (player == null) return "";
         return getFormattedName(player.getUniqueId(), player.getName());
     }
 
     /**
-     * Obtém o nome formatado de um jogador offline ou que nunca entrou.
-     * <p>
-     * Se o jogador nunca entrou no servidor (ou seja, não existe UUID conhecido ou nunca jogou),
-     * retorna apenas o nome puro informado, sem prefixo ou sufixo.
-     * Não tenta buscar dados no LuckPerms para jogadores desconhecidos.
-     *
-     * @param name Nome do jogador.
-     * @return CompletableFuture com o nome formatado, ou apenas o nome caso não exista.
+     * Retorna o nome do jogador já formatado (com prefixo/sufixo se houver).
+     * Se não existir LuckPerms para o UUID, retorna nome puro.
+     */
+    public static String getFormattedName(UUID uuid, String name) {
+        if (uuid == null || name == null) return name != null ? name : "";
+        return formattedNameCache.computeIfAbsent(uuid, id -> {
+            User user = luckPerms != null ? luckPerms.getUserManager().getUser(id) : null;
+            if (user == null) return name;
+            String prefix = user.getCachedData().getMetaData().getPrefix();
+            String suffix = user.getCachedData().getMetaData().getSuffix();
+            return (prefix != null ? prefix : "") + name + (suffix != null ? suffix : "");
+        });
+    }
+
+    /**
+     * Busca nome formatado para jogador offline.
+     * - Se jogador nunca entrou: retorna nome puro.
+     * - Se já jogou, tenta buscar prefixo/sufixo via LuckPerms.
+     * - Se online, utiliza getFormattedName(Player).
      */
     public static CompletableFuture<String> getFormattedOfflineName(String name) {
         if (name == null) return CompletableFuture.completedFuture("");
-        // Tenta encontrar o jogador online primeiro
-        Player onlinePlayer = getOnlinePlayer(name);
-        if (onlinePlayer != null) {
-            return CompletableFuture.completedFuture(getFormattedName(onlinePlayer));
-        }
-        // Busca o UUID do jogador offline
+        Player onlinePlayer = Bukkit.getPlayerExact(name);
+        if (onlinePlayer != null) return CompletableFuture.completedFuture(getFormattedName(onlinePlayer));
+
         Optional<UUID> uuidOpt = getPlayerUUID(name);
-        if (!uuidOpt.isPresent()) {
-            // Jogador nunca entrou: retorna nome puro, sem prefixo/sufixo
-            return CompletableFuture.completedFuture(name);
-        }
+        if (!uuidOpt.isPresent()) return CompletableFuture.completedFuture(name);
+
         UUID uuid = uuidOpt.get();
         if (formattedNameCache.containsKey(uuid)) {
             return CompletableFuture.completedFuture(formattedNameCache.get(uuid));
@@ -128,57 +107,55 @@ public final class playerNameUtils {
                 return formattedNameCache.get(uuid);
             }
             OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(uuid);
-
-            // Se o jogador realmente nunca jogou, retorna o nome puro
-            if ((offlinePlayer.getName() == null || offlinePlayer.getName().isEmpty()) &&
-                !offlinePlayer.hasPlayedBefore()) {
+            if ((offlinePlayer.getName() == null || offlinePlayer.getName().isEmpty())
+                    && !offlinePlayer.hasPlayedBefore()) {
+                // Jogador nunca visto
                 return name;
             }
-            return getFormattedName(uuid, offlinePlayer.getName());
+            return getFormattedName(uuid, offlinePlayer.getName() != null ? offlinePlayer.getName() : name);
         });
     }
 
     /**
-     * Obtém o nome formatado com base no UUID e nome do jogador.
-     *
-     * @param uuid UUID do jogador.
-     * @param name Nome do jogador.
-     * @return Nome formatado.
+     * Tenta pegar só o nome limpo de um jogador offline (sem prefixo/sufixo).
+     * Retorna "" se não encontrar.
      */
-    private static String getFormattedName(UUID uuid, String name) {
+    public static String getCleanOfflineName(String name) {
         if (name == null) return "";
-        return formattedNameCache.computeIfAbsent(uuid, id -> {
-            User user = luckPerms.getUserManager().getUser(id);
-            if (user == null) return name;
-            String prefix = user.getCachedData().getMetaData().getPrefix();
-            String suffix = user.getCachedData().getMetaData().getSuffix();
-            return (prefix != null ? prefix : "") +
-                   name +
-                   (suffix != null ? suffix : "");
-        });
+        Player onlinePlayer = Bukkit.getPlayerExact(name);
+        if (onlinePlayer != null) return onlinePlayer.getName();
+        Optional<UUID> uuidOpt = getPlayerUUID(name);
+        if (uuidOpt.isPresent()) {
+            OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(uuidOpt.get());
+            String offlineName = offlinePlayer.getName();
+            if (offlineName != null && !offlineName.isEmpty()) return offlineName;
+        }
+        return name;
     }
 
     /**
-     * Obtém um jogador online pelo nome.
-     *
-     * @param name Nome do jogador.
-     * @return Jogador online, ou null se não encontrado.
+     * Retorna um nome puro para jogador inexistente (garante nunca retornar prefixo/sufixo).
+     */
+    public static String getNonExistentPlayerName(String name) {
+        return name == null ? "" : name;
+    }
+
+    /**
+     * Obtém um jogador online pelo nome (case sensitive).
      */
     public static Player getOnlinePlayer(String name) {
-        return Bukkit.getPlayer(name);
+        return Bukkit.getPlayerExact(name);
     }
 
     /**
-     * Obtém o UUID de um jogador pelo nome.
-     *
-     * @param name Nome do jogador.
-     * @return Optional com UUID do jogador, ou empty se não encontrado.
+     * Tenta obter UUID de jogador pelo nome.
      */
     private static Optional<UUID> getPlayerUUID(String name) {
+        if (name == null) return Optional.empty();
         OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(name);
-        // isOnline = true ou hasPlayedBefore = true indica que existe algum dado
+        // hasPlayedBefore ou isOnline = true indica que existe algum dado
         return (offlinePlayer.hasPlayedBefore() || offlinePlayer.isOnline())
-               ? Optional.of(offlinePlayer.getUniqueId())
-               : Optional.empty();
+                ? Optional.of(offlinePlayer.getUniqueId())
+                : Optional.empty();
     }
 }

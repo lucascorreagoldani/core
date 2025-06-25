@@ -4,6 +4,7 @@ import com.realmmc.core.manager.spawnManager;
 import com.realmmc.core.utils.playerNameUtils;
 import com.realmmc.core.utils.soundUtils;
 import com.realmmc.core.utils.teleportUtils;
+import com.realmmc.core.combatLog.combatLog;
 import net.md_5.bungee.api.ChatColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -11,16 +12,11 @@ import org.bukkit.command.*;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
-import java.util.concurrent.CompletableFuture;
-
-/**
- * Comando /spawn [jogador] para teleportar você ou outros ao spawn.
- * Usa SpawnManager, teleportUtils, playerNameUtils, soundUtils.
- */
 public final class spawn implements CommandExecutor {
 
     private final spawnManager spawnManager;
     private final Plugin plugin;
+    private final combatLog combatLogInstance;
 
     private static final String SPAWN_NAO_DEFINIDO = ChatColor.RED + "O spawn não foi encontrado!";
     private static final String MUNDO_SPAWN_INVALIDO = ChatColor.RED + "Mundo de spawn não foi encontrado!";
@@ -34,9 +30,10 @@ public final class spawn implements CommandExecutor {
     private static final String COMANDO_CONSOLE = ChatColor.RED + "Apenas jogadores podem usar este comando!";
     private static final String USO_CORRETO = ChatColor.RED + "Utilize: /spawn [jogador]";
 
-    public spawn(spawnManager spawnManager, Plugin plugin) {
+    public spawn(spawnManager spawnManager, Plugin plugin, combatLog combatLogInstance) {
         this.spawnManager = spawnManager;
         this.plugin = plugin;
+        this.combatLogInstance = combatLogInstance;
     }
 
     @Override
@@ -69,8 +66,7 @@ public final class spawn implements CommandExecutor {
             return true;
         }
         Player jogador = (Player) sender;
-        teleportUtils.iniciarTeleporte(plugin, jogador, spawn, null);
-        // Mensagem de sucesso é do teleportUtils
+        teleportUtils.iniciarTeleporte(plugin, jogador, spawn, combatLogInstance);
         return true;
     }
 
@@ -95,7 +91,6 @@ public final class spawn implements CommandExecutor {
             if (sender instanceof Player) soundUtils.reproduzirSucesso((Player) sender);
             return true;
         } else {
-            // Async: checa se existe ou está offline
             playerNameUtils.getFormattedOfflineName(nomeAlvo).thenAccept(nomeFormatado -> Bukkit.getScheduler().runTask(plugin, () -> {
                 if (nomeFormatado == null || nomeFormatado.equals(nomeAlvo)) {
                     enviarMensagemErro(sender, String.format(JOGADOR_INEXISTENTE, nomeAlvo));

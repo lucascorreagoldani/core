@@ -6,6 +6,7 @@ import com.realmmc.core.listeners.*;
 import com.realmmc.core.manager.combatStatsManager;
 import com.realmmc.core.manager.spawnManager;
 import com.realmmc.core.manager.warpManager;
+import com.realmmc.core.manager.combatLogManager; // IMPORTANTE: importe o combatLogManager
 import com.realmmc.core.utils.playerNameUtils;
 import net.luckperms.api.LuckPerms;
 import org.bukkit.Bukkit;
@@ -20,18 +21,18 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.util.logging.Level;
 
-/**
- * Plugin principal do servidor. Centraliza inicialização, registro de comandos, listeners e sistemas.
- *
- * @author github.com/lucascorreagoldani
- */
 public final class Main extends JavaPlugin {
     private FileConfiguration config;
     private warpManager warpManager;
     private spawnManager spawnManager;
+    private combatLog combatLogInstance;
+    private combatLogManager combatLogManagerInstance; // Adicionado
 
     @Override
     public void onEnable() {
+        this.combatLogInstance = new combatLog(this);
+        this.combatLogManagerInstance = new combatLogManager(this); // Cria a instância do manager
+
         getLogger().info("§a[Essentials] Iniciando plugin...");
         try {
             if (!getDataFolder().exists()) getDataFolder().mkdirs();
@@ -54,7 +55,15 @@ public final class Main extends JavaPlugin {
     @Override
     public void onDisable() {
         getLogger().info("§a[Essentials] Plugin desabilitado.");
-        playerNameUtils.shutdown(); // Garante o shutdown correto
+        playerNameUtils.shutdown();
+    }
+
+    public combatLog getCombatLogInstance() {
+        return combatLogInstance;
+    }
+
+    public combatLogManager getCombatLogManagerInstance() {
+        return combatLogManagerInstance;
     }
 
     private void carregarConfiguracao() {
@@ -99,10 +108,10 @@ public final class Main extends JavaPlugin {
             getCommand("setspawn").setExecutor(new setspawn(spawnManager, this));
             getCommand("tp").setExecutor(new teleport(this));
 
-            spawn spawnCommand = new spawn(spawnManager, this);
+            spawn spawnCommand = new spawn(spawnManager, this, combatLogInstance);
             getCommand("spawn").setExecutor(spawnCommand);
 
-            warp warpCommand = new warp(config, this);
+            warp warpCommand = new warp(config, this, combatLogInstance);
             getCommand("warp").setExecutor(warpCommand);
 
         } catch (Exception e) {
@@ -113,9 +122,13 @@ public final class Main extends JavaPlugin {
 
     private void registrarListeners() {
         try {
-            getServer().getPluginManager().registerEvents(new combatLog(this), this);
+            getServer().getPluginManager().registerEvents(new combatLogListener(combatLogInstance, this), this);
             getServer().getPluginManager().registerEvents(new playerJoinListener(this), this);
             getServer().getPluginManager().registerEvents(new teleportMoveListener(), this);
+
+            // REGISTRO DO combatLogManager (novo)
+            getServer().getPluginManager().registerEvents(combatLogManagerInstance, this);
+
         } catch (Exception e) {
             getLogger().severe("Erro ao registrar listeners: " + e.getMessage());
             e.printStackTrace();

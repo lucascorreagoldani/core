@@ -1,29 +1,20 @@
 package com.realmmc.core.listeners;
 
-import com.realmmc.core.utils.soundUtils;
 import com.realmmc.core.utils.teleportUtils;
-import com.realmmc.core.manager.combatLogManager;
-import org.bukkit.Bukkit;
+import com.realmmc.core.combatLog.combatLog;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.event.*;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.entity.PlayerDeathEvent;
-import org.bukkit.event.player.PlayerCommandPreprocessEvent;
-import org.bukkit.event.player.PlayerKickEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.Plugin;
 
-/**
- * Listener principal de combatLog: integra com CombatLogManager, teleportUtils etc.
- */
 public class combatLogListener implements Listener {
 
-    private final combatLogManager combatManager;
+    private final combatLog combatLogInstance;
     private final Plugin plugin;
 
-    public combatLogListener(combatLogManager manager, Plugin plugin) {
-        this.combatManager = manager;
+    public combatLogListener(combatLog combatLogInstance, Plugin plugin) {
+        this.combatLogInstance = combatLogInstance;
         this.plugin = plugin;
     }
 
@@ -34,36 +25,12 @@ public class combatLogListener implements Listener {
         Player damager = getDamager(event.getDamager());
         if (damager == null || damaged == damager) return;
 
-        combatManager.handleCombat(damager, damaged);
-        combatManager.handleCombat(damaged, damager);
-    }
+        combatLogInstance.addCombat(damager, damaged);
+        combatLogInstance.addCombat(damaged, damager);
 
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onPlayerDeath(PlayerDeathEvent event) {
-        combatManager.handleDeath(event.getEntity());
-    }
-
-    @EventHandler(priority = EventPriority.LOW)
-    public void onCommand(PlayerCommandPreprocessEvent event) {
-        Player player = event.getPlayer();
-        if (!combatManager.isPlayerInCombat(player.getUniqueId()) || player.hasPermission("core.moderator")) return;
-        String cmd = event.getMessage().split(" ")[0].replace("/", "").toLowerCase();
-        if (combatManager.isAllowedCommand(cmd)) return;
-        event.setCancelled(true);
-        player.sendMessage(combatLogManager.COMMAND_BLOCKED);
-        soundUtils.reproduzirErro(player);
-    }
-
-    @EventHandler
-    public void onQuit(PlayerQuitEvent event) {
-        combatManager.handleDisconnect(event.getPlayer());
-        teleportUtils.cancelarTeleporte(event.getPlayer()); // cancela teleporte quando sair
-    }
-
-    @EventHandler
-    public void onKick(PlayerKickEvent event) {
-        combatManager.handleDisconnect(event.getPlayer());
-        teleportUtils.cancelarTeleporte(event.getPlayer());
+        // Agora cancela teleporte com motivo combate
+        teleportUtils.cancelarTeleporte(damaged, teleportUtils.CancelReason.COMBAT);
+        teleportUtils.cancelarTeleporte(damager, teleportUtils.CancelReason.COMBAT);
     }
 
     private Player getDamager(org.bukkit.entity.Entity entity) {

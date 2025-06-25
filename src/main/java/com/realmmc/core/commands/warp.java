@@ -1,5 +1,6 @@
 package com.realmmc.core.commands;
 
+import com.realmmc.core.combatLog.combatLog;
 import com.realmmc.core.manager.warpManager;
 import com.realmmc.core.utils.jsonUtils;
 import com.realmmc.core.utils.playerNameUtils;
@@ -30,6 +31,7 @@ public final class warp implements CommandExecutor, Listener {
     private final warpManager warpManager;
     private final FileConfiguration config;
     private final Plugin plugin;
+    private final combatLog combatLogInstance;
 
     private static final String PERMISSAO_OUTROS = ChatColor.RED + "Apenas Moderador ou superiores podem executar esse comando!";
     private static final String JOGADOR_OFFLINE = ChatColor.RED + "O jogador %s está offline no momento!";
@@ -50,9 +52,10 @@ public final class warp implements CommandExecutor, Listener {
     private static final String WARP_NAO_ENCONTRADA = ChatColor.RED + "A warp %s não foi encontrada!";
     private static final String MUNDO_WARP_INVALIDO = ChatColor.RED + "Mundo da warp não foi encontrado!";
 
-    public warp(FileConfiguration config, Plugin plugin) {
+    public warp(FileConfiguration config, Plugin plugin, combatLog combatLogInstance) {
         this.config = config;
         this.plugin = plugin;
+        this.combatLogInstance = combatLogInstance;
         this.warpManager = new warpManager(config);
     }
 
@@ -73,39 +76,29 @@ public final class warp implements CommandExecutor, Listener {
     private boolean processarTeleporteProprio(CommandSender sender, String warpIdentifier) {
         String warpName = warpManager.getInternalWarpName(warpIdentifier);
         if (warpName == null) {
-            enviarMensagemErro(sender, String.format(WARP_NAO_ENCONTRADA, warpIdentifier));
+            enviarMensagemErro(sender, String.format("A warp %s não foi encontrada!", warpIdentifier));
             return true;
         }
-
         String warpPermission = warpManager.getPermission(warpName);
         String displayName = warpManager.getDisplayName(warpName);
 
         if (warpPermission != null && !warpPermission.isEmpty()) {
             if (!(sender instanceof Player) || !((Player) sender).hasPermission(warpPermission)) {
-                if (warpName.equalsIgnoreCase("vip")) {
-                    enviarMensagemErro(sender, SEM_PERMISSAO_WARP_VIP);
-                } else {
-                    enviarMensagemErro(sender, String.format(SEM_PERMISSAO_WARP, displayName));
-                }
+                enviarMensagemErro(sender, String.format("Você não pode acessar a warp %s!", displayName));
                 return true;
             }
         }
-
         Location warpLocation = warpManager.getWarpLocation(warpName);
         if (warpLocation == null || warpLocation.getWorld() == null) {
-            enviarMensagemErro(sender, MUNDO_WARP_INVALIDO);
+            enviarMensagemErro(sender, "Mundo da warp não foi encontrado!");
             return true;
         }
-
         if (!(sender instanceof Player)) {
-            enviarMensagemErro(sender, COMANDO_CONSOLE);
+            enviarMensagemErro(sender, "Apenas jogadores podem usar este comando!");
             return true;
         }
-
         Player jogador = (Player) sender;
-        teleportUtils.iniciarTeleporte(plugin, jogador, warpLocation, null); // combatLog não é usado aqui
-
-        // Mensagem de sucesso será enviada no teleportUtils
+        teleportUtils.iniciarTeleporte(plugin, jogador, warpLocation, combatLogInstance);
         return true;
     }
 

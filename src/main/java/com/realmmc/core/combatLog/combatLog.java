@@ -90,7 +90,7 @@ public final class combatLog implements Listener {
         return null;
     }
 
-    private void addCombat(Player player, Player opponent) {
+    public void addCombat(Player player, Player opponent) {
         UUID playerId = player.getUniqueId();
         UUID opponentId = opponent.getUniqueId();
         long now = System.currentTimeMillis();
